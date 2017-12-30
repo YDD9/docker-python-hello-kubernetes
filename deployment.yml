@@ -16,6 +16,7 @@ spec:
     spec:
       containers:
       - name: python-hello
-        image: ydd9/python-hello  # image name inside dockerhub
+        # image name inside dockerhub
+        image: "ydd9/python-hello"
         ports:
         - containerPort: 8080
