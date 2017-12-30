@@ -5,17 +5,17 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app: python-hello
+      app: pythonhello
   replicas: 2 # tells deployment to run 2 pods matching the template
   template: # create pods using pod definition in this template
     metadata:
       # unlike pod-nginx.yaml, the name is not included in the meta data as a unique name is
       # generated from the deployment name
       labels:
-        app: python-hello
+        app: pythonhello
     spec:
       containers:
-      - name: python-hello
+      - name: pythonhello
         # image name inside dockerhub
         image: "ydd9/python-hello"
         ports:
