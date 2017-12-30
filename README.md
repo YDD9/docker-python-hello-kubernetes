@@ -130,5 +130,8 @@ $ docker save my_image > my_image.tar
 $ docker load --input my_image.tar
 ```
 
-
-
+Deploy this app with Kubernetes(K8s)
+template found https://kubernetes.io/docs/tasks/run-application/run-stateless-application-deployment/
+```
+kubectl apply -f https://github.com/YDD9/docker-app-hello/blob/master/deployment.yml
+```

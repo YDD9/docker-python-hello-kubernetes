@@ -19,5 +19,3 @@ spec:
         image: ydd9/python-hello  # image name inside dockerhub
         ports:
         - containerPort: 8080
-
-# template found https://kubernetes.io/docs/tasks/run-application/run-stateless-application-deployment/
