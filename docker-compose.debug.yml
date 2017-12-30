@@ -1,0 +1,10 @@
+version: '2.1'
+
+services:
+  pythonhellodockerk8s:
+    image: pythonhellodockerk8s
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 3000:3000
