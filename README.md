@@ -1,4 +1,4 @@
-** A Docker Hello World! APP written in Python Flask **
+**A Docker Hello World! APP written in Python Flask**
 To explore Docker technology and VirtualBox, together with testing for NAT and Bridge network settings.
 (Next step is to deploy this dokcer APP with Kubernetes.)
 
