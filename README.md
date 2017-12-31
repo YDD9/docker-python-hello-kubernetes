@@ -32,6 +32,9 @@ Work based on host PC Win10 and VirtualBox, with different VirtualBox network se
         - [retry with Flannel with hard coded IP range 10.244.0.0/16 and kube-dns works](#retry-with-flannel-with-hard-coded-ip-range-102440016-and-kube-dns-works)
 - [Kubectl Autocomplete](#kubectl-autocomplete)
 - [Deploy again the app](#deploy-again-the-app)
+        - [To workaround the Linux bug persistent MAC address on VirtualBox https://github.com/systemd/systemd/issues/3374](#to-workaround-the-linux-bug-persistent-mac-address-on-virtualbox-httpsgithubcomsystemdsystemdissues3374)
+        - [Error adding network: failed to set bridge cni](#error-adding-network-failed-to-set-bridge-cni)
+
 
 # Environment
 host: Win10
@@ -46,7 +49,7 @@ host: Win10
 
 **Almost all steps are done inside the guest Debian unless specified.**
 
-# List out used Python packages in requirements.txt 
+# List out used Python packages in requirements.txt
 Generate a packages list based on import, ignore other not used ones.
 But better to use `pip freeze` when you have a Python virtual env for dedicated projects.
 ```
@@ -166,29 +169,33 @@ $ docker load --input my_image.tar
 
 
 - [Environment](#environment)
-- [requirements.txt list out all used Python packages](#requirementstxt-list-out-all-used-python-packages)
+- [List out used Python packages in requirements.txt](#list-out-used-python-packages-in-requirementstxt)
 - [Dockerfile](#dockerfile)
-- [build your image](#build-your-image)
-- [run your app in Docker](#run-your-app-in-docker)
-- [verify the app in a browser](#verify-the-app-in-a-browser)
-- [Further verify the app in browser](#further-verify-the-app-in-browser)
-- [push docker images to dockerhub for easy usages on other PCs](#push-docker-images-to-dockerhub-for-easy-usages-on-other-pcs)
-- [save docker images locally and import for use](#save-docker-images-locally-and-import-for-use)
-- [deploy with kubectl and yml](#deploy-with-kubectl-and-yml)
-- [check deployment status and troubleshot](#check-deployment-status-and-troubleshot)
+- [Build Docker image](#build-docker-image)
+- [Run app in Docker](#run-app-in-docker)
+- [Verify the app in a browser](#verify-the-app-in-a-browser)
+- [(Optional) Verify further the app](#optional-verify-further-the-app)
+- [Push Docker image to dockerhub for easy download and reuse](#push-docker-image-to-dockerhub-for-easy-download-and-reuse)
+- [(Optional) Save Docker image locally and import for use](#optional-save-docker-image-locally-and-import-for-use)
+- [Use kubeadm to setup Kubernetes cluster](#use-kubeadm-to-setup-kubernetes-cluster)
+- [Prepare deployment.yml and deploy app with kubectl](#prepare-deploymentyml-and-deploy-app-with-kubectl)
+- [Check deployment status and troubleshot](#check-deployment-status-and-troubleshot)
         - [Once deployment created, check the process status](#once-deployment-created-check-the-process-status)
-        - [Why 2 unavailable, check deployed pods](#why-2-unavailable-check-deployed-pods)
+        - [Why deployment is unavailable, check deployed pods](#why-deployment-is-unavailable-check-deployed-pods)
         - [Why FailedCreatePodSandBox](#why-failedcreatepodsandbox)
-        - [Why kube-flannel CrashLoopBackOff and kube-dns keep Creating...](#why-kube-flannel-crashloopbackoff-and-kube-dns-keep-creating)
+        - [Why kube-flannel CrashLoopBackOff and kube-dns keep ContainerCreating...](#why-kube-flannel-crashloopbackoff-and-kube-dns-keep-containercreating)
 - [kube-dns still failing and needs to be deleted](#kube-dns-still-failing-and-needs-to-be-deleted)
-        - [retry with Flannel with given IP range 10.244.0.0/16 NO change and kube-dns works](#retry-with-flannel-with-given-ip-range-102440016-no-change-and-kube-dns-works)
+        - [retry with Flannel with hard coded IP range 10.244.0.0/16 and kube-dns works](#retry-with-flannel-with-hard-coded-ip-range-102440016-and-kube-dns-works)
 - [Kubectl Autocomplete](#kubectl-autocomplete)
+- [Deploy again the app](#deploy-again-the-app)
+        - [To workaround the Linux bug persistent MAC address on VirtualBox https://github.com/systemd/systemd/issues/3374](#to-workaround-the-linux-bug-persistent-mac-address-on-virtualbox-httpsgithubcomsystemdsystemdissues3374)
+        - [Error adding network: failed to set bridge cni](#error-adding-network-failed-to-set-bridge-cni)
 
 
 **Deploy this app with Kubernetes(K8s)**
 
 # Use kubeadm to setup Kubernetes cluster
-Official guid is very clear, but you may encounter different problems, you can check problems I had via [this link](https://github.com/YDD9/YDD9.github.io/blob/master/_posts/2017-12-21-Docker-Kubernetes.md#kubeadm-install)
+Official guid is very clear, but you may encounter many different problems, you can check problems I had via [this link](https://github.com/YDD9/YDD9.github.io/blob/master/_posts/2017-12-21-Docker-Kubernetes.md#kubeadm-install)
 
 You can also deploy K8s cluster manually, this hard way is good for people who want to understand all and
 admin the process. https://github.com/kelseyhightower/kubernetes-the-hard-way or the official guide.
@@ -480,8 +487,76 @@ kube-system   kube-flannel-ds-c6gvc                      1/1       Running      
 kube-system   kube-proxy-j4bzd                           1/1       Running             0          1h
 kube-system   kube-proxy-qgh7c                           1/1       Running             0          1h
 kube-system   kube-scheduler-node40                      1/1       Running             0          1h
+
+# switch to work node
+$ journalctl -ex
+...
+node42 kernel: IPv6: ADDRCONF(NETDEV_CHANGE): eth0: link becomes ready
+node42 kernel: cni0: port 1(veth8f9db634) entered blocking state
+node42 kernel: cni0: port 1(veth8f9db634) entered disabled state
+node42 kernel: device veth8f9db634 entered promiscuous mode
+node42 kernel: cni0: port 1(veth8f9db634) entered blocking state
+node42 kernel: cni0: port 1(veth8f9db634) entered forwarding state
+node42 systemd-udevd[32394]: Could not generate persistent MAC address for veth8f9db634: No such file or directory
+node42 kubelet[12356]: E1231 16:29:55.333809   12356 cni.go:259] Error adding network: failed to set bridge addr: "cni0" already
+node42 kubelet[12356]: E1231 16:29:55.334064   12356 cni.go:227] Error while adding to cni network: failed to set bridge addr: "
+node42 kernel: cni0: port 1(veth0e544932) entered blocking state
+...
+```
+
+### To workaround the Linux bug persistent MAC address on VirtualBox https://github.com/systemd/systemd/issues/3374
+file exmaple https://serverfault.com/questions/837454/interface-will-not-rename-under-systemd
+```
+# cp /usr/lib/systemd/network/99-default.link /etc/systemd/network/99-default.link
+# replace MACAddressPolicy=persistent with MACAddressPolicy=none
+
+# user tested with (systemd 232, Debian 9 stretch):
+# nano /etc/systemd/network/99-default.link
+[Link]
+NamePolicy=kernel database onboard slot path
+MACAddressPolicy=none
 ```
 
 
+### Error adding network: failed to set bridge cni
+This issue happens when you used `kubeadm reset`, but cni is not cleaned up
+You have to manually clean up and re-create cluster again.
+https://github.com/kubernetes/kubernetes/issues/39557
+https://stackoverflow.com/questions/41359224/kubernetes-failed-to-setup-network-for-pod-after-executed-kubeadm-reset
+
+```
+kubeadm reset
+
+systemctl stop kubelet
+systemctl stop docker
+
+rm -rf /var/lib/cni/
+rm -rf /var/lib/kubelet/*
+rm -rf /etc/cni/
+
+# delete network interface in case of centOS ifconfig cni0 down
+ip link delete cni0
+ip link delete flannel.1
+ip link delete docker0
+
+systemctl start docker
+```
+
+Repeat the cluster setup and app deployment works
+```
+root@node40:~/Downloads# kubectl get pods --all-namespaces
+NAMESPACE     NAME                                       READY     STATUS    RESTARTS   AGE
+default       python-hello-deployment-6b69b45664-j4768   1/1       Running   0          2m
+default       python-hello-deployment-6b69b45664-kwnlz   1/1       Running   0          2m
+kube-system   etcd-node40                                1/1       Running   0          3m
+kube-system   kube-apiserver-node40                      1/1       Running   0          3m
+kube-system   kube-controller-manager-node40             1/1       Running   0          3m
+kube-system   kube-dns-6f4fd4bdf-zvhmn                   3/3       Running   0          4m
+kube-system   kube-flannel-ds-ddmd8                      1/1       Running   0          3m
+kube-system   kube-flannel-ds-phprc                      1/1       Running   0          4m
+kube-system   kube-proxy-6qs4m                           1/1       Running   0          4m
+kube-system   kube-proxy-qmnhz                           1/1       Running   0          3m
+kube-system   kube-scheduler-node40                      1/1       Running   0          4m
+```
 
 
