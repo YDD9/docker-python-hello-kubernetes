@@ -466,6 +466,7 @@ $ source <(kubectl completion bash) # setup autocomplete in bash, bash-completio
 # Deploy again the app
 ```
 $ kubectl apply -f https://raw.githubusercontent.com/YDD9/docker-app-hello/master/deployment.yml
+
 $ kubectl get pods --all-namespaces
 NAMESPACE     NAME                                       READY     STATUS              RESTARTS   AGE
 default       python-hello-deployment-6b69b45664-744h8   0/1       ContainerCreating   0          6m
@@ -479,6 +480,7 @@ kube-system   kube-flannel-ds-c6gvc                      1/1       Running      
 kube-system   kube-proxy-j4bzd                           1/1       Running             0          1h
 kube-system   kube-proxy-qgh7c                           1/1       Running             0          1h
 kube-system   kube-scheduler-node40                      1/1       Running             0          1h
+```
 
 
 
