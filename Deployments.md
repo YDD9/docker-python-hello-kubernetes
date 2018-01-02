@@ -329,6 +329,10 @@ spec:
 # Switch to hostpath PV
 https://kubernetes.io/docs/tasks/configure-pod-container/configure-persistent-volume-storage/
 Kubernetes supports hostPath for development and testing on a single-node cluster. But mine is two nodes: one master, one node, still worth trying.
+
+change metadata.name to a random name pv0001
+change spec.hostPath.path to an existing node dir
+comment spec.sotragecClassName to avoid PVC to use Dynamic mode.
 ```
 kind: PersistentVolume
 apiVersion: v1
@@ -344,6 +348,65 @@ spec:
     - ReadWriteOnce
   hostPath:
     path: "/mnt/disks/ssd1"
+```
+
+SVC, PVC, Deployment
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pv-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+#  storageClassName: fast
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1beta2 # for versions before 1.8.0 use apps/v1beta1
+kind: Deployment
+metadata:
+  name: mysql
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - image: mysql:5.6
+        name: mysql
+        env:
+          # Use secret in real usage
+        - name: MYSQL_ROOT_PASSWORD
+          value: password
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-persistent-storage
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: mysql-persistent-storage
+        persistentVolumeClaim:
+          claimName: mysql-pv-claim
 ```
 
 Now this works, it takes less than one minute.
