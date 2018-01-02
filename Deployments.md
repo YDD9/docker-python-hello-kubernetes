@@ -15,6 +15,7 @@
 - [Expose Pod Information to Containers Through Files](#expose-pod-information-to-containers-through-files)
 - [Switch to local as PersistentVolume, StorageClass is only supported when using cloud volume](#switch-to-local-as-persistentvolume-storageclass-is-only-supported-when-using-cloud-volume)
 - [Switch to hostpath PV](#switch-to-hostpath-pv)
+- [connect to mysql via a client](#connect-to-mysql-via-a-client)
 
 # Spot the deployment order
 Look at the hash name after the python-hello-deployment, it's added one after another:
@@ -181,7 +182,7 @@ https://kubernetes.io/docs/tasks/inject-data-application/downward-api-volume-exp
 
 
 **mysql stateful app deployment**
-Since kubeamd cluster doesn't create default StorageClass, following directly https://kubernetes.io/docs/tasks/run-application/run-single-instance-stateful-application/ will fail.
+Since kubeamd cluster doesn't create default StorageClass, following  https://kubernetes.io/docs/tasks/run-application/run-single-instance-stateful-application/ to deploy will fail.
 ```
 $ kubectl create -f https://k8s.io/docs/tasks/run-application/mysql-deployment.yaml
 service "mysql" created
@@ -367,3 +368,14 @@ mysql-544bbdcd6f-msssf   1/1       Running   0          1m
 
 To gain better understanding of Volume is to check youtube
 ![Volume](https://raw.githubusercontent.com/YDD9/docker-app-hello/master/images/Volume.png)
+
+# connect to mysql via a client
+```
+root@node40:/media/share# kubectl run -it --rm --image=mysql:5.6 --restart=Never mysql-client -- mysql -h mysql -ppassword
+If you don't see a command prompt, try pressing enter.
+
+mysql> create database test;
+mysql> use test;
+mysql> create table  pet (name VARCHAR(20), owner VARCHAR(20), species VARCHAR(20), sex CHAR(1), birth DATE, death DATE);
+Query OK, 0 rows affected (0.04 sec)
+```
