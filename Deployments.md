@@ -332,7 +332,7 @@ Kubernetes supports hostPath for development and testing on a single-node cluste
 
 change metadata.name to a random name pv0001
 change spec.hostPath.path to an existing node dir
-comment spec.sotragecClassName to avoid PVC to use Dynamic mode.
+comment spec.sotragecClassName to avoid PVC using Dynamic mode.
 ```
 kind: PersistentVolume
 apiVersion: v1
