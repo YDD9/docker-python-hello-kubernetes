@@ -168,31 +168,6 @@ $ docker save my_image > my_image.tar
 $ docker load --input my_image.tar
 ```
 
-
-- [Environment](#environment)
-- [List out used Python packages in requirements.txt](#list-out-used-python-packages-in-requirementstxt)
-- [Dockerfile](#dockerfile)
-- [Build Docker image](#build-docker-image)
-- [Run app in Docker](#run-app-in-docker)
-- [Verify the app in a browser](#verify-the-app-in-a-browser)
-- [(Optional) Verify further the app](#optional-verify-further-the-app)
-- [Push Docker image to dockerhub for easy download and reuse](#push-docker-image-to-dockerhub-for-easy-download-and-reuse)
-- [(Optional) Save Docker image locally and import for use](#optional-save-docker-image-locally-and-import-for-use)
-- [Use kubeadm to setup Kubernetes cluster](#use-kubeadm-to-setup-kubernetes-cluster)
-- [Prepare deployment.yml and deploy app with kubectl](#prepare-deploymentyml-and-deploy-app-with-kubectl)
-- [Check deployment status and troubleshot](#check-deployment-status-and-troubleshot)
-        - [Once deployment created, check the process status](#once-deployment-created-check-the-process-status)
-        - [Why deployment is unavailable, check deployed pods](#why-deployment-is-unavailable-check-deployed-pods)
-        - [Why FailedCreatePodSandBox](#why-failedcreatepodsandbox)
-        - [Why kube-flannel CrashLoopBackOff and kube-dns keep ContainerCreating...](#why-kube-flannel-crashloopbackoff-and-kube-dns-keep-containercreating)
-- [kube-dns still failing and needs to be deleted](#kube-dns-still-failing-and-needs-to-be-deleted)
-        - [retry with Flannel with hard coded IP range 10.244.0.0/16 and kube-dns works](#retry-with-flannel-with-hard-coded-ip-range-102440016-and-kube-dns-works)
-- [Kubectl Autocomplete](#kubectl-autocomplete)
-- [Deploy again the app](#deploy-again-the-app)
-        - [To workaround the Linux bug persistent MAC address on VirtualBox https://github.com/systemd/systemd/issues/3374](#to-workaround-the-linux-bug-persistent-mac-address-on-virtualbox-httpsgithubcomsystemdsystemdissues3374)
-        - [Error adding network: failed to set bridge cni](#error-adding-network-failed-to-set-bridge-cni)
-
-
 **Deploy this app with Kubernetes(K8s)**
 
 # Use kubeadm to setup Kubernetes cluster
