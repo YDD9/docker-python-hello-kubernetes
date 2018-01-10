@@ -1,0 +1,25 @@
+---
+# https://kubernetes.io/docs/concepts/services-networking/ingress/
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: test
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: test.com
+    http:
+      paths:
+      - path: /dev
+        backend:
+          serviceName: dev-svc
+          servicePort: 80
+      - path: /test
+        backend:
+          serviceName: test-svc
+          servicePort: 80
+      - path: /prod
+        backend:
+          serviceName: prod-svc
+          servicePort: 80

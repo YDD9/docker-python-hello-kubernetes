@@ -18,6 +18,18 @@ def hello():
     # must use return not print
     return msg
 
+@app.route('/dev')
+def dev():
+    return 'Dev page\n' + os.getenv('PYTHON_HELLO_POD_NAME', '') + '\n'
+
+@app.route('/test')
+def test():
+    return 'Test page\n' + os.getenv('PYTHON_HELLO_POD_NAME', '') + '\n'
+
+@app.route('/prod')
+def prod():
+    return 'Prod page\n' + os.getenv('PYTHON_HELLO_POD_NAME', '') + '\n'
+
 if __name__ == "__main__":
     # without port 8080, port 5000 will be used by Flask
     # it is listenning port for web connection
