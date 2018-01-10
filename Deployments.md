@@ -140,6 +140,10 @@ Hello World!
 Better way to handle this can be create a service
 http://alesnosek.com/blog/2017/02/14/accessing-kubernetes-pods-from-outside-of-the-cluster/
 
+Another better explaination through practice https://www.katacoda.com/courses/kubernetes/kubectl-run-containers
+
+Also check the network part in kubernetes doc https://kubernetes.io/docs/concepts/cluster-administration/networking/
+
 # Label one of the app pods as test
 Take out one pod from current app to be used for test purpose,
 but it will then not manage by python-hello-deployment, needs to be deleted manually.
