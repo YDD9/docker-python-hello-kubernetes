@@ -1,0 +1,18 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  # If you see your ingress-controller-rc has issues to access default:default password
+  # then give cluster-admin to your controller rc pod.
+  # https://github.com/fabric8io/fabric8/issues/6840
+  name: nginx-ingress-rc
+subjects:
+  - kind: ServiceAccount
+    # Reference to upper's `metadata.name`
+    name: default
+    # Reference to upper's `metadata.namespace`
+    namespace: default
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

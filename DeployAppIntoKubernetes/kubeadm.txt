@@ -1,0 +1,59 @@
+kubeadm init --pod-network-cidr=10.244.0.0/16
+
+# do it in each your new shell
+mkdir -p $HOME/.kube
+cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+chown $(id -u):$(id -g) $HOME/.kube/config
+# or from root
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# install flannel
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/v0.9.1/Documentation/kube-flannel.yml
+
+# deploy app
+kubectl apply -f https://raw.githubusercontent.com/YDD9/docker-app-hello/master/deployment.yml
+
+kubectl describe pods python-hello-deployment
+kubectl describe deployment python-hello-deployment
+
+kubectl delete deployment python-hello-deployment
+
+
+# display IP at the shell prompt https://superuser.com/questions/668174/how-can-you-display-host-ip-address-in-bash-prompt
+export PS1="root@192.168.0.39:$ "
+
+kubeadm join --token 016a7a.34a76307516dd098 192.168.0.42:6443 --discovery-token-ca-cert-hash sha256:39c1e39c9b73081e2ced3a193a490c6bb005ce09754f9b061f443c7e9a4477dd
+
+Start containers using Kubectl
+https://www.katacoda.com/courses/kubernetes/kubectl-run-containers
+
+ Kubectl run_ is similar to docker run but at a cluster level.
+
+The format of the command is kubectl run <name of deployment> <properties>
+
+Task
+The following command will launch a deployment called http which will start a container based on the Docker Image katacoda/docker-http-server:latest.
+
+kubectl run http --image=katacoda/docker-http-server:latest --replicas=1
+Use the following command to expose the container port 80 on the host 8000 binding to the external-ip of the host.
+
+kubectl expose deployment http --external-ip="172.17.0.18" --port=8000 --target-port=80
+
+You will then be able to ping the host and see the result from the HTTP service.
+
+curl http://172.17.0.18:8000
+
+With kubectl run it's possible to create the deployment and expose it as a single command.
+
+Task
+Use the command command to create a second http service exposed on port 8001.
+
+kubectl run httpexposed --image=katacoda/docker-http-server:latest --replicas=1 --port=80 --hostport=8001
+
+You should be able to access it using curl http://172.17.0.18:8001
+
+Under the covers, this exposes the Pod via Docker Port Mapping. As a result, you will not see the service listed using kubectl get svc
+
+To find the details you can use docker ps | grep httpexposed
+
+"Pause Containers" Running the above command you'll notice the ports are exposed on the Pod, not the http container itself. The "Pause container" is responsibility for defining the network for the Pod. Other containers in the pod use share the same network namespace. This improves network performance and allow multiple containers to communicate over the same network interface.

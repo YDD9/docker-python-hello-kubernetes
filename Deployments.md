@@ -16,6 +16,7 @@
 - [Switch to local as PersistentVolume, StorageClass is only supported when using cloud volume](#switch-to-local-as-persistentvolume-storageclass-is-only-supported-when-using-cloud-volume)
 - [Switch to hostpath PV](#switch-to-hostpath-pv)
 - [connect to mysql via a client](#connect-to-mysql-via-a-client)
+- [delete pod and re-create based on current yml](#delete-pod-and-re-create-based-on-current-yml)
 
 # Spot the deployment order
 Look at the hash name after the python-hello-deployment, it's added one after another:
@@ -445,4 +446,11 @@ mysql> create database test;
 mysql> use test;
 mysql> create table  pet (name VARCHAR(20), owner VARCHAR(20), species VARCHAR(20), sex CHAR(1), birth DATE, death DATE);
 Query OK, 0 rows affected (0.04 sec)
+```
+
+# delete pod and re-create based on current yml
+In case of not having the yaml file:
+NAMESPACE: rc, deploy 
+```
+kubectl get pod PODNAME -n NAMESPACE -o yaml | kubectl replace --force -f -
 ```
