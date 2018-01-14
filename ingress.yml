@@ -7,6 +7,10 @@ metadata:
   annotations:
     ingress.kubernetes.io/rewrite-target: /
 spec:
+  tls:
+  - hosts:
+    - test.com
+    secretName: test-secret
   rules:
   - host: test.com
     http:
@@ -14,10 +18,6 @@ spec:
       - path: /dev
         backend:
           serviceName: dev-svc
-          servicePort: 80
-      - path: /test
-        backend:
-          serviceName: test-svc
           servicePort: 80
       - path: /prod
         backend:

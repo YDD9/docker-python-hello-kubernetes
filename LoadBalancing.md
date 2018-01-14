@@ -2,6 +2,9 @@ Load Balancing
 
 - [L4 Load Balancing](#l4-load-balancing)
 - [L7 Load Balancing](#l7-load-balancing)
+- [deploy controller via helm](#deploy-controller-via-helm)
+- [deploy controller via image](#deploy-controller-via-image)
+- [another example](#another-example)
 - [config file:](#config-file)
 
 # L4 Load Balancing
@@ -15,17 +18,30 @@ Kubernetes provides built‑in HTTP load balancing to route external traffic to 
 
 For a good understanding, please watch [nginx2016](https://youtu.be/L7JZdyJ8qJQ) and [nginx2017](https://youtu.be/K-1mVPCT7SM) conf video.
 
-kubernetes resources Ingress can be considered purely the rules in your router/firewall. To have it work, you need to get your router/firewall device and for us here is software Ingress-controller nginx(use `helm install nginx`).
+kubernetes resources Ingress can be considered purely the rules in your router/firewall. To have it work, you need to get your router/firewall device and for us here is software Ingress-controller nginx(use `kubectl apply -f ingres-controller.yml` to deploy a nginx).
 
 nginx is also called reverse-proxy, which works in the opposite direction compared to the company proxy we normally use(forward proxy). From inside the company network we need a proxy to go on the internet, it protects and hides our IPs, etc. When a outsite client want to access website hosted in pod(internally), reverse-proxy redirects traffic to website in pod and hide the pod.
 ![nginx connections](https://raw.githubusercontent.com/YDD9/docker-app-hello/master/images/nginx.png)
 
+
+# deploy controller via helm
+https://medium.com/utinity/deploying-nginx-ingress-with-lets-encrypt-on-kubernetes-using-helm-a2a3b76a2e3e
+
+# deploy controller via image
+https://medium.com/@gokulc/setting-up-nginx-ingress-on-kubernetes-2b733d8d2f45
+
+# another example
+https://blogs.technet.microsoft.com/livedevopsinjapan/2017/02/28/configure-nginx-ingress-controller-for-tls-termination-on-kubernetes-on-azure-2/
+
+
 # config file:
+secret.yml
+default-server-secret.yml
+
 ingress.yml</br>
 ingres-controller.yml
 
 app-dev.yml
-app-test.yml
 app-prod.yml
 
 to be continue...

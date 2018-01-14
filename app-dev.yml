@@ -1,24 +1,39 @@
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: python-hello-dev-svc
+  labels:
+    app: python-hello-dev
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: python-hello-dev
+---
 apiVersion: apps/v1beta2 # for versions before 1.8.0 use apps/v1beta1
 kind: Deployment
 metadata:
-  name: python-hello-deployment
+  name: python-hello-dev-deploy
 spec:
   selector:
     matchLabels:
-      app: python-hello
+      app: python-hello-dev
   replicas: 2 # tells deployment to run 2 pods matching the template
   template: # create pods using pod definition in this template
     metadata:
       # unlike pod-nginx.yaml, the name is not included in the meta data as a unique name is
       # generated from the deployment name
       labels:
-        app: python-hello
+        app: python-hello-dev
     spec:
       containers:
-      - name: python-hello
+      - name: python-hello-dev
         # image name inside dockerhub
-        image: "ydd9/python-hello-env:v1"
+        image: "ydd9/python-hello-env:dev"
         ports:
         - containerPort: 8080
         env:

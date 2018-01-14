@@ -1,0 +1,35 @@
+---
+# https://github.com/nginxinc/kubernetes-ingress/blob/master/examples/complete-example/nginx-ingress-rc.yaml#L21
+apiVersion: v1
+kind: ReplicaController
+metadata:
+  name: nginx-ingress-rc
+  labels:
+    app: nginx-ingress
+spec:
+  replicas: 1
+  selector:
+    app: nginx-ingress
+  template:
+    metadata:
+      labels:
+        app: nginx-ingress
+    spec:
+      containers:
+      - image: nginxdemos/nginx-ingress:1.1.0
+        imagePullPolicy: Always
+        name: nginx-ingress
+        ports:
+        - containerPort: 8080
+          hostPort: 80
+        - containerPort: 443
+          hostPort: 443
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        args:
+         #- -v=3
+         #- -nginx-configmaps=$(POD_NAMESPACE)/nginx-config
+          - -default-server-tls-secret=$(POD_NAMESPACE)/default-server-secret
