@@ -8,7 +8,7 @@ metadata:
 spec:
   ports:
   - port: 80
-    targetPort: 8080
+    targetPort: 80
     protocol: TCP
     name: http
   selector:
@@ -35,7 +35,7 @@ spec:
         # image name inside dockerhub
         image: "ydd9/python-hello-env:dev"
         ports:
-        - containerPort: 8080
+        - containerPort: 80
         env:
         - name: PYTHON_HELLO_NODE_NAME
           valueFrom:

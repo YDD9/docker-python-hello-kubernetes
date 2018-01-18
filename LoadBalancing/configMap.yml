@@ -1,0 +1,10 @@
+---
+# https://github.com/kubernetes/ingress-nginx/blob/master/docs/user-guide/exposing-tcp-udp-services.md
+# The next example shows how to expose the service example-go running in
+# the namespace default in the port 8080 using the port 9000
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcp-configmap-example
+data:
+  80: "default/python-hello-dev-svc:80"
