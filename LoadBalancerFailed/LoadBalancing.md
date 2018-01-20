@@ -68,7 +68,7 @@ kubectl create secret tls ${CERT_NAME} --key ${KEY_FILE} --cert ${CERT_FILE}
 
 [A concrete example](https://github.com/kubernetes/contrib/tree/master/ingress/controllers/nginx/examples/tls#tls-certificate-termination)
 ```
-$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=192.168.0.45.xip.io"
+$ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /tmp/tls.key -out /tmp/tls.crt -subj "/CN=test.com"
 $ kubectl create secret tls test-secret --key /tmp/tls.key --cert /tmp/tls.crt
 
 $kubectl get secrets

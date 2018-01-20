@@ -22,7 +22,7 @@ kubectl delete deployment python-hello-deployment
 # display IP at the shell prompt https://superuser.com/questions/668174/how-can-you-display-host-ip-address-in-bash-prompt
 export PS1="root@192.168.0.39:$ "
 
-kubeadm join --token 016a7a.34a76307516dd098 192.168.0.42:6443 --discovery-token-ca-cert-hash sha256:39c1e39c9b73081e2ced3a193a490c6bb005ce09754f9b061f443c7e9a4477dd
+kubeadm join --token f529b4.5b62db0afed2609f 192.168.0.43:6443 --discovery-token-ca-cert-hash sha256:3db52738745fa333a98795ae16bc2946f630ba3d6276a6899c78722db07a0381
 
 Start containers using Kubectl
 https://www.katacoda.com/courses/kubernetes/kubectl-run-containers

@@ -20,7 +20,7 @@ COPY . .
 # Dockerfile section EXPOSE https://docs.docker.com/engine/reference/builder/#expose
 # Networking section https://docs.docker.com/engine/userguide/networking/#exposing-and-publishing-ports
 # docker run expose port https://docs.docker.com/engine/reference/run/#expose-incoming-ports
-EXPOSE 80
+EXPOSE 8080
 
 # run the app in Docker container
 CMD [ "python", "./app.py" ]

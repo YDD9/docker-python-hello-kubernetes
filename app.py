@@ -31,11 +31,11 @@ def dev():
 # def test():
 #     return 'Test page FROM ' + currHost + ' ' + os.getenv('PYTHON_HELLO_POD_NAME', ' ')
 
-# @app.route('/prod')
-# def prod():
-#     return 'Prod page FROM ' + currHost + ' ' + os.getenv('PYTHON_HELLO_POD_NAME', ' ')
+@app.route('/prod')
+def prod():
+    return 'Prod page FROM ' + currHost + ' ' + os.getenv('PYTHON_HELLO_POD_NAME', ' ')
 
 if __name__ == "__main__":
     # without port 8080, port 5000 will be used by Flask
     # it is listenning port for web connection
-    app.run(host='0.0.0.0', port=80)
+    app.run(host='0.0.0.0', port=8080)

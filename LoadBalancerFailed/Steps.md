@@ -50,6 +50,11 @@ default-http-backend   ClusterIP      10.111.36.0     <none>          80/TCP    
 ingress-nginx          LoadBalancer   10.99.174.227   192.168.0.250   80:31614/TCP,443:31153/TCP   14m
 ```
 
+Enter your site address with ip in C:\Windows\System32\drivers\etc\hosts file for win10
+```
+192.168.0.250	test.com
+```
+
 Get into the pod of ingress-nginx-controller to check nginx config, flush current DNS `ipconfig /flushdns`
 ```
  ## start server 192.168.0.45.xip.io
@@ -87,6 +92,8 @@ Get into the pod of ingress-nginx-controller to check nginx config, flush curren
             if ($pass_access_scheme = http)
         ...
 ```
+
+win10
 
 ingress service type choose
 http://www.devoperandi.com/load-balancing-in-kubernetes/

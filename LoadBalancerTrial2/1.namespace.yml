@@ -1,0 +1,6 @@
+---
+# https://github.com/kubernetes/ingress-nginx/blob/master/deploy/namespace.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-nginx
