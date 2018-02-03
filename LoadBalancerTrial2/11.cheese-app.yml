@@ -1,0 +1,33 @@
+---
+# https://github.com/errm/cheese
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: cheddar-deployment
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: cheddar
+    spec:
+      containers:
+        - name: cheddar
+          image: errm/cheese:cheddar
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cheddar-svc
+  labels:
+    app: cheddar
+spec:
+  ports:
+     -  port: 80
+        protocol: TCP
+        targetPort: 80
+        name: http
+  selector:
+    app: cheddar

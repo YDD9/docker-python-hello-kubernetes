@@ -110,6 +110,8 @@ Because services were not the long-term answer for external routing, some contri
 Using Kubernetes Ingress Controller from scratch
 https://medium.com/@samwalker505/using-kubernetes-ingress-controller-from-scratch-35faeee8eca
 
+understand reading.
+http://containerops.org/2017/01/30/kubernetes-services-and-ingress-under-x-ray/
 
 
 http://alesnosek.com/blog/2017/02/14/accessing-kubernetes-pods-from-outside-of-the-cluster/
