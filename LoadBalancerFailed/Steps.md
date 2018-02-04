@@ -17,7 +17,7 @@ root@node3: curl -v 192.168.0.45:30692
 ```
 
 To solve this IP issue, you can give a fake IP 192.168.0.250 for example,
-and force it as external IP. https://github.com/kubernetes/kube-deploy/issues/220
+and force it as `externalIPs`. https://github.com/kubernetes/kube-deploy/issues/220
 ```
 kind: Service
 apiVersion: v1
