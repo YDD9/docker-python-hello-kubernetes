@@ -267,3 +267,12 @@ root@etcd2:/etc/kubernetes/pki/etcd# systemctl status etcd
            └─2760 /usr/local/bin/etcd --name etcd2 --data-dir /var/lib/etcd --listen-client-urls http://192.168.0.52:2379 --advertise-client-urls http://192.168.0.52:2379 --listen-peer-urls http://192.168.0.52:2380 --initial-advertise-peer-urls http://192.168.0.52:2380 --cert-file=/etc/kubernetes/pki/etcd/server.pem --key-file=/etc/kubernetes/pki/etcd/server-key.pem --client-cert-auth --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --peer-cert-file=/etc/kubernetes/pki/etcd/peer.pem --peer-key-file=/etc/kubernetes/pki/etcd/peer-key.pem --peer-client-cert-auth --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --initial-cluster etcd0=http://192.168.0.50:2380,etcd1=http://192.168.0.51:2380,etcd2=http://192.168.0.52:2380 --initial-cluster-token my-etcd-token --initial-cluster-state new
 ```
 # Set up master Load Balancer
+https://www.digitalocean.com/community/tutorials/how-to-set-up-nginx-load-balancing
+
+https://www.digitalocean.com/community/tutorials/how-to-set-up-highly-available-haproxy-servers-with-keepalived-and-floating-ips-on-ubuntu-14-04
+
+Nginx runs on a seperate machine
+https://www.upcloud.com/support/how-to-set-up-load-balancing/
+
+Nginx official round-robin, least-conn algo:
+https://www.nginx.com/resources/admin-guide/load-balancer/
