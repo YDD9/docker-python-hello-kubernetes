@@ -127,12 +127,12 @@ mkdir -p /etc/kubernetes/pki/etcd
 cd /etc/kubernetes/pki/etcd
 
 # first time ssh connection to etcd0 needs a confirm 'yes'
-scp root@192.168.0.45:/etc/kubernetes/pki/etcd/ca.pem .
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/ca.pem .
 
-scp root@192.168.0.45:/etc/kubernetes/pki/etcd/ca-key.pem .
-scp root@192.168.0.45:/etc/kubernetes/pki/etcd/client.pem .
-scp root@192.168.0.45:/etc/kubernetes/pki/etcd/client-key.pem .
-scp root@192.168.0.45:/etc/kubernetes/pki/etcd/ca-config.json .
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/ca-key.pem .
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/client.pem .
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/client-key.pem .
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/ca-config.json .
 ```
 Where `192.168.0.45` corresponds to the public or private IPv4 of etcd0.
 `scp` secure copy(remote file copy program)
@@ -166,7 +166,9 @@ echo "PEER_NAME=$PEER_NAME" >> /etc/etcd.env
 echo "PRIVATE_IP=$PRIVATE_IP" >> /etc/etcd.env
 ```
 
-Copy the systemd unit, make sure you replace with correct IPv4 address <etcd0-ip-address>192.168.0.45, <etcd1-ip-address>192.168.0.47 and <etcd2-ip-address>192.168.0.48 for file /etc/systemd/system/etcd.service.
+* Copy the systemd unit, make sure you replace with correct IPv4 address <etcd0-ip-address>192.168.0.50, <etcd1-ip-address>192.168.0.51 and <etcd2-ip-address>192.168.0.52 for file /etc/systemd/system/etcd.service.
+* Change `https` to `http` for below file if you are using private IPv4 locally.
+* Update /etc/resolv.conf file with IPs to bypass DNS
 ```
 cat >/etc/systemd/system/etcd.service <<EOL
 [Unit]
@@ -185,10 +187,10 @@ TimeoutStartSec=0
 
 ExecStart=/usr/local/bin/etcd --name ${PEER_NAME} \
     --data-dir /var/lib/etcd \
-    --listen-client-urls https://${PRIVATE_IP}:2379 \
-    --advertise-client-urls https://${PRIVATE_IP}:2379 \
-    --listen-peer-urls https://${PRIVATE_IP}:2380 \
-    --initial-advertise-peer-urls https://${PRIVATE_IP}:2380 \
+    --listen-client-urls http://${PRIVATE_IP}:2379 \
+    --advertise-client-urls http://${PRIVATE_IP}:2379 \
+    --listen-peer-urls http://${PRIVATE_IP}:2380 \
+    --initial-advertise-peer-urls http://${PRIVATE_IP}:2380 \
     --cert-file=/etc/kubernetes/pki/etcd/server.pem \
     --key-file=/etc/kubernetes/pki/etcd/server-key.pem \
     --client-cert-auth \
@@ -197,7 +199,7 @@ ExecStart=/usr/local/bin/etcd --name ${PEER_NAME} \
     --peer-key-file=/etc/kubernetes/pki/etcd/peer-key.pem \
     --peer-client-cert-auth \
     --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem \
-    --initial-cluster etcd0=https://192.168.0.45:2380,etcd1=https://192.168.0.47:2380,etcd2=https://192.168.0.48:2380 \
+    --initial-cluster etcd0=http://192.168.0.50:2380,etcd1=http://192.168.0.51:2380,etcd2=http://192.168.0.52:2380 \
     --initial-cluster-token my-etcd-token \
     --initial-cluster-state new
 
@@ -205,7 +207,15 @@ ExecStart=/usr/local/bin/etcd --name ${PEER_NAME} \
 WantedBy=multi-user.target
 EOL
 ```
+Trick for DNS if you run locally IPv4
+```
+nano /etc/resolv.conf
 
+$ add below
+etcd0 192.168.0.50
+etcd1 192.168.0.51
+etcd2 192.168.0.52
+```
 Finally, launch etcd like so:
 ```
 systemctl daemon-reload
@@ -213,7 +223,47 @@ systemctl start etcd
 
 systemctl status etcd
 ```
-`systemctl start etcd` can't start the etcd because node4 is not in cluster
-and it's already member... /usr/local/bin/etcd --name ${PEER_NAME} do not use ???
 
+Debug service start
+```
+systemctl status etcd
+
+systemctl --no-page -t service -a | grep etcd
+journalctl -ex
+
+journalctl --no-page -u etcd.service
+
+etcdctl member list
+etcdctl cluster-health
+```
+
+If error of already member, stop service and delete file then restart.</br>
+`systemctl start etcd` can't start the etcd because node4 is not in cluster
+and it's already member...
+Delete `rm -rf /var/lib/etcd` as you specify in config as `--date-dir`
+
+http://blog.csdn.net/god_wot/article/details/77854093
+
+If error of no such file, check before if you miss generate any files.
+```
+Feb 07 22:59:50 etcd0 etcd[1779]: peerTLS: cert = /etc/kubernetes/pki/etcd/peer.pem, key = /etc/kubernetes/pki/etcd/peer-key.pem, ca = , trusted-ca = /etc/kubernetes/pki/etcd/ca.pem, client-cert-auth = true
+Feb 07 22:59:50 etcd0 etcd[1779]: open /etc/kubernetes/pki/etcd/peer.pem: no such file or directory
+Feb 07 22:59:50 etcd0 systemd[1]: etcd.service: Main process exited, code=exited, status=1/FAILURE
+Feb 07 22:59:50 etcd0 systemd[1]: Failed to start etcd.
+Feb 07 22:59:50 etcd0 systemd[1]: etcd.service: Unit entered failed state.
+Feb 07 22:59:50 etcd0 systemd[1]: etcd.service: Failed with result 'exit-code'.
+```
+
+Successfully created the etcd cluster, you see the status is active(running)
+```
+root@etcd2:/etc/kubernetes/pki/etcd# systemctl status etcd
+● etcd.service - etcd
+   Loaded: loaded (/etc/systemd/system/etcd.service; disabled; vendor preset: enabled)
+   Active: active (running) since Wed 2018-02-07 23:42:58 CET; 6s ago
+     Docs: https://github.com/coreos/etcd
+ Main PID: 2760 (etcd)
+    Tasks: 7 (limit: 4915)
+   CGroup: /system.slice/etcd.service
+           └─2760 /usr/local/bin/etcd --name etcd2 --data-dir /var/lib/etcd --listen-client-urls http://192.168.0.52:2379 --advertise-client-urls http://192.168.0.52:2379 --listen-peer-urls http://192.168.0.52:2380 --initial-advertise-peer-urls http://192.168.0.52:2380 --cert-file=/etc/kubernetes/pki/etcd/server.pem --key-file=/etc/kubernetes/pki/etcd/server-key.pem --client-cert-auth --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --peer-cert-file=/etc/kubernetes/pki/etcd/peer.pem --peer-key-file=/etc/kubernetes/pki/etcd/peer-key.pem --peer-client-cert-auth --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --initial-cluster etcd0=http://192.168.0.50:2380,etcd1=http://192.168.0.51:2380,etcd2=http://192.168.0.52:2380 --initial-cluster-token my-etcd-token --initial-cluster-state new
+```
 # Set up master Load Balancer
