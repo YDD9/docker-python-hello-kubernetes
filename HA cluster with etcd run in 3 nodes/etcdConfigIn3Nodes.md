@@ -8,6 +8,7 @@ Except mentioned specifically, all steps runs on all etcd 3 work nodes.
 - [Create SSH access for all etcd work ondes](#create-ssh-access-for-all-etcd-work-ondes)
 - [Generate etcd server and peer certs](#generate-etcd-server-and-peer-certs)
 - [Run etcd with systemd](#run-etcd-with-systemd)
+- [Troubleshoot etcd](#troubleshoot-etcd)
 - [Set up master Load Balancer](#set-up-master-load-balancer)
 
 # Install cfssl - CLI & API tool for TLS/SSL
@@ -207,11 +208,11 @@ ExecStart=/usr/local/bin/etcd --name ${PEER_NAME} \
 WantedBy=multi-user.target
 EOL
 ```
-Trick for DNS if you run locally IPv4
+Trick for DNS if you run locally IPv4 but restart will erase it.
 ```
 nano /etc/resolv.conf
 
-$ add below
+# add below everytime after restart
 etcd0 192.168.0.50
 etcd1 192.168.0.51
 etcd2 192.168.0.52
@@ -224,6 +225,7 @@ systemctl start etcd
 systemctl status etcd
 ```
 
+# Troubleshoot etcd
 Debug service start
 ```
 systemctl status etcd
@@ -254,7 +256,43 @@ Feb 07 22:59:50 etcd0 systemd[1]: etcd.service: Unit entered failed state.
 Feb 07 22:59:50 etcd0 systemd[1]: etcd.service: Failed with result 'exit-code'.
 ```
 
-Successfully created the etcd cluster, you see the status is active(running)
+If `systemctl status etcd` is active but `etcdctl cluster-health` is showing
+cluster unhealth, because `etcdctl` default check localhost:2379, but we have configured differently, so we pass --endpoints
+```
+root@etcd0:~# etcdctl member list
+Error:  client: etcd cluster is unavailable or misconfigured; error #0: dial tcp 127.0.0.1:4001: getsockopt: connection refused
+; error #1: dial tcp 127.0.0.1:2379: getsockopt: connection refused
+
+error #0: dial tcp 127.0.0.1:4001: getsockopt: connection refused
+error #1: dial tcp 127.0.0.1:2379: getsockopt: connection refused
+
+root@etcd0:~# etcdctl member list
+Error:  client: etcd cluster is unavailable or misconfigured; error #0: dial tcp 127.0.0.1:4001: getsockopt: connection refused
+; error #1: dial tcp 127.0.0.1:2379: getsockopt: connection refused
+
+error #0: dial tcp 127.0.0.1:4001: getsockopt: connection refused
+error #1: dial tcp 127.0.0.1:2379: getsockopt: connection refused
+
+
+root@etcd0:~# etcdctl --endpoints 'http://192.168.0.50:2379' cluster-health
+member 79daeb26f9651b44 is healthy: got healthy result from http://192.168.0.50:2379
+member c52ff0ed834fd076 is healthy: got healthy result from http://192.168.0.51:2379
+member de245bc5339308a0 is healthy: got healthy result from http://192.168.0.52:2379
+cluster is healthy
+```
+
+Make sure the service is started with know `PEER_NAME` and `PRIVATE_IP`
+```
+echo $PEER_NAME
+echo $PRIVATE_IP
+```
+Otherwise add them into ~/.profile
+```
+PEER_NAME=etcd0
+PRIVATE_IP=192.168.0.50
+```
+
+Successfully created the etcd cluster, you see the status is active(running) on any etcd node
 ```
 root@etcd2:/etc/kubernetes/pki/etcd# systemctl status etcd
 ● etcd.service - etcd
@@ -266,6 +304,16 @@ root@etcd2:/etc/kubernetes/pki/etcd# systemctl status etcd
    CGroup: /system.slice/etcd.service
            └─2760 /usr/local/bin/etcd --name etcd2 --data-dir /var/lib/etcd --listen-client-urls http://192.168.0.52:2379 --advertise-client-urls http://192.168.0.52:2379 --listen-peer-urls http://192.168.0.52:2380 --initial-advertise-peer-urls http://192.168.0.52:2380 --cert-file=/etc/kubernetes/pki/etcd/server.pem --key-file=/etc/kubernetes/pki/etcd/server-key.pem --client-cert-auth --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --peer-cert-file=/etc/kubernetes/pki/etcd/peer.pem --peer-key-file=/etc/kubernetes/pki/etcd/peer-key.pem --peer-client-cert-auth --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --initial-cluster etcd0=http://192.168.0.50:2380,etcd1=http://192.168.0.51:2380,etcd2=http://192.168.0.52:2380 --initial-cluster-token my-etcd-token --initial-cluster-state new
 ```
+
+If after VMs reboot, etcd cluster and service failed to restart, do below
+on etcd0 first(will pending if etcd1 & etcd 2 not join) then etcd1 and etcd2.
+```
+systemctl stop etcd
+rm -rf /var/lib/etcd/
+systemctl daemon-reload
+systemctl start etcd
+```
+
 # Set up master Load Balancer
 https://www.digitalocean.com/community/tutorials/how-to-set-up-nginx-load-balancing
 
@@ -276,3 +324,79 @@ https://www.upcloud.com/support/how-to-set-up-load-balancing/
 
 Nginx official round-robin, least-conn algo:
 https://www.nginx.com/resources/admin-guide/load-balancer/
+
+Install nginx in a new VM, after installation, open a browser and check
+`localhost`, you should see the nginx page.
+```
+apt-get install nginx
+```
+
+Config `/etc/nginx/sites-available/default`
+```
+upstream www {
+        server 192.168.0.50;
+        server 192.168.0.51;
+        server 192.168.0.52;
+}
+```
+
+Generate SSH keys for each of the master nodes by `ssh-keygen -t rsa -b 4096 -C "<email>"`. After doing this, each master will have an SSH key in `~/.ssh/id_rsa.pub` and an entry in etcd0’s `~/.ssh/authorized_keys` file.
+
+Run the following to get cert from etcd0 to master:
+```
+mkdir -p /etc/kubernetes/pki/etcd
+scp root@<etcd0-ip-address>:/etc/kubernetes/pki/etcd/ca.pem /etc/kubernetes/pki/etcd
+scp root@<etcd0-ip-address>:/etc/kubernetes/pki/etcd/client.pem /etc/kubernetes/pki/etcd
+scp root@<etcd0-ip-address>:/etc/kubernetes/pki/etcd/client-key.pem /etc/kubernetes/pki/etcd
+```
+
+Run `kubeadm init --config=config.yaml`
+```
+cat >config.yaml <<EOF
+apiVersion: kubeadm.k8s.io/v1alpha1
+kind: MasterConfiguration
+api:
+  advertiseAddress: <private-ip>
+etcd:
+  endpoints:
+  - https://<etcd0-ip-address>:2379
+  - https://<etcd1-ip-address>:2379
+  - https://<etcd2-ip-address>:2379
+  caFile: /etc/kubernetes/pki/etcd/ca.pem
+  certFile: /etc/kubernetes/pki/etcd/client.pem
+  keyFile: /etc/kubernetes/pki/etcd/client-key.pem
+networking:
+  podSubnet: <podCIDR>
+apiServerCertSANs:
+- <load-balancer-ip>
+apiServerExtraArgs:
+  endpoint-reconciler-type=lease
+EOF
+```
+
+Ensure that the following placeholders are replaced:
+
+`<private-ip>` with the private IPv4 of the master server.
+`<etcd0-ip>`, `<etcd1-ip>` and `<etcd2-ip>` with the IP addresses of your three etcd nodes
+`<podCIDR>` with your Pod CIDR (Flannel CNI `--pod-network-cidr=10.244.0.0/16`). Please read the CNI network section of the docs for more information. Some CNI providers do not require a value to be set.
+`<load-balancer-ip>` from nginx
+```
+apiVersion: kubeadm.k8s.io/v1alpha1
+kind: MasterConfiguration
+api:
+  advertiseAddress: 192.168.0.43
+etcd:
+  endpoints:
+  - http://192.168.0.50:2379
+  - http://192.168.0.51:2379
+  - http://192.168.0.52:2379
+  caFile: /etc/kubernetes/pki/etcd/ca.pem
+  certFile: /etc/kubernetes/pki/etcd/client.pem
+  keyFile: /etc/kubernetes/pki/etcd/client-key.pem
+networking:
+  podSubnet: 10.244.0.0/16
+apiServerCertSANs:
+- 192.168.0.53
+apiServerExtraArgs:
+  endpoint-reconciler-type=lease
+```
