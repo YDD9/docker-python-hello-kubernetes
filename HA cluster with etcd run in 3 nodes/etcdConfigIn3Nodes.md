@@ -1,7 +1,9 @@
 https://github.com/kubernetes/kubeadm/issues/546
 
-Take the option1 to install etcd in 3 work nodes and keep 2 masters in cluster.
+Take the option1 Hosting etcd cluster on separate compute nodes (Virtual Machines) and extra 3 masters in k8s cluster.
+
 Except mentioned specifically, all steps runs on all etcd 3 work nodes.
+
 
 - [Install cfssl - CLI & API tool for TLS/SSL](#install-cfssl---cli-api-tool-for-tlsssl)
 - [For etcd0 only](#for-etcd0-only)
@@ -10,6 +12,12 @@ Except mentioned specifically, all steps runs on all etcd 3 work nodes.
 - [Run etcd with systemd](#run-etcd-with-systemd)
 - [Troubleshoot etcd](#troubleshoot-etcd)
 - [Set up master Load Balancer](#set-up-master-load-balancer)
+    - [Exploring the nginx.conf File](#exploring-the-nginxconf-file)
+    - [Exploring the Default Server Block](#exploring-the-default-server-block)
+    - [Config ngxin on Master0](#config-ngxin-on-master0)
+    - [Troubleshoot kubeadm init issues](#troubleshoot-kubeadm-init-issues)
+- [Run kubeadm init on other masters: master1 and master2](#run-kubeadm-init-on-other-masters-master1-and-master2)
+- [Add worksers in k8s cluster](#add-worksers-in-k8s-cluster)
 
 # Install cfssl - CLI & API tool for TLS/SSL
 ```
@@ -101,6 +109,7 @@ cfssl gencert -ca=ca.pem -ca-key=ca-key.pem -config=ca-config.json -profile=clie
 This should result in `client.pem` and `client-key.pem` being created.
 
 # Create SSH access for all etcd work ondes
+Save below command in `~/.profile` file:
 ```
 export PEER_NAME=$(hostname)
 export PRIVATE_IP=$(ip addr show eth1 | grep -Po 'inet \K[\d.]+')
@@ -315,30 +324,240 @@ systemctl start etcd
 ```
 
 # Set up master Load Balancer
+You will need to ensure that the load balancer routes to just `master0` on port `6443`. This is because kubeadm will perform health checks using the load balancer IP. Since `master0` is set up individually first, the other masters will not have running apiservers, which will result in kubeadm hanging indefinitely.
+
+If possible, first use a smart load balancing algorithm like least connections, second use health checks so unhealthy nodes can be removed from circulation. Most providers will provide these features.
+
+First, [Nginx least connections load balancing method](https://www.nginx.com/resources/admin-guide/load-balancer/)</br>
+The `least_conn` load balancing method might not work as expected without the zone directive, at least on small loads. This method of tcp and http load balancing passes a request to the server with the least number of active connections. Again, if the configuration of the group is not shared, each worker process uses its own counter for the number of connections. And if one worker process passes by a request to a server, the other worker process can also pass a request to the same server. However, you can increase the number of requests to reduce this effect. On high loads requests are distributed among worker processes evenly, and the least_conn load balancing method works as expected.
+
+Second, [Nginx Passive Health Monitoring](https://www.nginx.com/resources/admin-guide/load-balancer/)</br>
+When NGINX considers a server unavailable, it temporarily stops sending requests to that server until it is considered active again. The following parameters of the server directive configure the conditions to consider a server unavailable:
+
+ * The `fail_timeout` parameter sets the time during which the specified number of failed attempts should happen and still consider the server unavailable. In other words, the server is unavailable for the interval set by fail_timeout.
+ * The `max_fails` parameter sets the number of failed attempts that should happen during the specified time to still consider the server unavailable.
+
+The **default values are 10 seconds and 1 attempt**. So if NGINX fails to send a request to some server or does not receive a response from this server at least once, it immediately considers the server unavailable for 10 seconds.
+
+The following example shows how to set these parameters inside default ngixn config `/etc/nginx/sites-available/default`:
+```
+upstream backend {
+    least_conn;
+
+    server backend1.example.com;
+    server backend2.example.com max_fails=3 fail_timeout=30s;
+    server backend3.example.com max_fails=2;
+}
+```
+Nginx also has Active Health Monitoring, you can go explore that topic further.
+
+Nginx `/etc/nginx/nginx.conf` and `/etc/nginx/sites-available/default` structure explained:
+1. https://linode.com/docs/web-servers/nginx/how-to-configure-nginx/
+2. https://www.digitalocean.com/community/tutorials/how-to-configure-the-nginx-web-server-on-a-virtual-private-server
+
+Nginx stores its configuration files within the "/etc/nginx" directory.
+
+```
+$ cd /etc/nginx
+$ ls -F
+conf.d/         koi-win           naxsi.rules   scgi_params       uwsgi_params
+fastcgi_params  mime.types        nginx.conf    sites-available/  win-utf
+koi-utf         naxsi_core.rules  proxy_params  sites-enabled/
+```
+
+The `sites-available` and `sites-enabled` directories are used to define configurations for your websites. Files are generally created in the `sites-available` directory, and then symbolically linked to the `sites-enabled` directory when they are ready to go live.
+
+The `conf.d` directory can be used for site configuration as well. Every file within this directory ending with `.conf` is read into the configuration when Nginx is started, so make sure every file defines valid Nginx configuration syntax.
+
+Before start, backup whole folder with a date.
+```
+cp -R /etc/nginx /etc/nginx.$(date "+%b_%d_%Y_%H.%M.%S")
+```
+
+## Exploring the nginx.conf File
+```
+root@master0:/etc/nginx# cat nginx.conf
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+        worker_connections 768;
+        # multi_accept on;
+}
+
+http{
+...
+```
+**user**: Defines which Linux system user will own and run the nginx server. Most Debian-based distributions use www-data but this may be different in other distros. There are certain use cases that benefit from changing the user; for instance if you run two simultaneous web servers, or need another program’s user to have control over nginx.</br>
+**worker_process**: Defines how many threads, or simultaneous instances, of nginx to run. You can learn more about this directive and the values of adjusting it here.</br>
+**pid**: Defines where nginx will write its master process ID, or PID. The PID is used by the operating system to keep track of and send signals to the nginx process.</br>
+This portion of the configuration file can also include things like error log locations using the "error_log" directive. `error_log  /var/log/nginx/error.log warn;`
+
+The next section in our file is the `events` section. This is a special location that controls how Nginx will handle connections.
+
+The following section is the http block which covers the universal directives for nginx as it handles HTTP web traffic. The first part of the HTTP block is shown below:
+```
+http {
+
+        ##
+        # Basic Settings
+        ##
+
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        # server_tokens off;
+
+        # server_names_hash_bucket_size 64;
+        # server_name_in_redirect off;
+
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+
+        ##
+        # SSL Settings
+        ##
+
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2; # Dropping SSLv3, ref: POODLE
+        ssl_prefer_server_ciphers on;
+
+        ##
+        # Logging Settings
+        ##
+
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+
+        ##
+        # Gzip Settings
+        ##
+
+        gzip on;
+        gzip_disable "msie6";
+
+        # gzip_vary on;
+        # gzip_proxied any;
+        # gzip_comp_level 6;
+        # gzip_buffers 16 8k;
+        # gzip_http_version 1.1;
+        # gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+        ##
+        # Virtual Host Configs
+        ##
+
+        include /etc/nginx/conf.d/*.conf;
+        include /etc/nginx/sites-enabled/*;
+}
+```
+**include**</br>
+The `include` statement at the beginning of this section includes the file `mime.types` located at `/etc/nginx/mime.types`. What this means is that anything written in the file `mime.types` is interpreted as if it was written inside the http { } block. This lets you include a lengthy amount of information in the http { } block without having it clutter up the main configuration file. Try to avoid too many chained inclusions (i.e., including a file that itself includes a file, etc.) _Keep it to one or two levels of inclusion if possible, for readability purposes._</br>
+You can always include all `.conf` files or simply all files in a certain directory with the directive:
+```
+include /etc/nginx/conf.d/*.conf;
+include /etc/nginx/sites-enabled/*;
+```
+This tells us that the server and location blocks that define specific sites and url match locations will take place outside of this file.
+This allows us to maintain a modular configuration arrangement where we can create new files when we would like to serve new sites. It allows us to group related content together,while hiding the details that do not change in most situations.
+
+**gzip**
+```
+gzip on;
+gzip_disable "msie6";
+```
+This tells Nginx to enable gzip to compress data that is sent to clients, but to disable gzip compression when the client is Internet Explorer version 6, because that browser does not understand gzip compression.
+You should always put configuration details into the highest container to which they apply. This means that if you want parameter X to apply to every server block, then placing it within the http block will cause it to propagate to every server configuration.
+If you have options that should have different values for some server blocks, you can specify them at a higher level and then override them within the server block. Nginx will take the lowest-level specification that applies to a setting.
+
+## Exploring the Default Server Block
+```
+$ cd /etc/nginx/sites-available
+$ sudo nano default
+server {
+    listen 80;
+    listen [::]:80;
+
+	root /usr/share/nginx/www;
+	index index.html index.htm;
+
+	server_name localhost;
+
+	location / {
+		try_files $uri $uri/ /index.html;
+	}
+
+	location /doc/ {
+		alias /usr/share/doc/;
+		autoindex on;
+		allow 127.0.0.1;
+		deny all;
+	}
+}
+```
+This block is placed into the `nginx.conf` file near the end of the http block, by using the `include` directive, as we discussed in the last section. The default file is very well-commented, but I've removed the comments to save space and demonstrate how simple the definition of a site can be.
+
+The `listen` directive, which is located in the server block, tells nginx the hostname/IP and the TCP port where it should listen for HTTP connections. By default, nginx will listen for HTTP connections on port 80. Common examples for the `listen` directive.
+```
+listen 80 default_server;
+listen [::]:80 default_server ipv6only=on;
+listen     127.0.0.1:80;
+listen     localhost:80;
+```
+The argument `default_server` means this virtual host will answer requests on port 80 that don’t specifically match another virtual host’s listen statement. The second statement listens over IPv6 and behaves in the same way.
+
+The `root` directive defines the directory where the website's contents are located. This is the location where Nginx will start looking for files that are requested by the browser. The default website searches for its content in `/usr/share/nginx/www`.
+
+The next line involves the `index` directive.
+This configures the default pages served for the domain. If no page was requested, the server block will search for a file called `index.html` and return it. If it cannot find that file, it will try to serve a file called `index.htm`.
+
+The `server_name` directive contains a list of domain names that will be served from this server block. You can include as many names as you would like, separated by spaces.
+
+Location blocks are used to specify how certain resource requests are handled within a server.The line `location /` specifies that the directives within the brackets will apply to all resources requested by the client that do not match other location blocks.
+
+The `try_files` directive is a very useful tool for defining a chain of attempts that should be made for resource requests.This means that when a request is made that is being served by that location block, Nginx will first try to serve the literal uri as a file. This is declared using the `$uri` variable, which will hold the resource being requested.
+
+## Config ngxin on Master0
 https://www.digitalocean.com/community/tutorials/how-to-set-up-nginx-load-balancing
 
 https://www.digitalocean.com/community/tutorials/how-to-set-up-highly-available-haproxy-servers-with-keepalived-and-floating-ips-on-ubuntu-14-04
 
-Nginx runs on a seperate machine
-https://www.upcloud.com/support/how-to-set-up-load-balancing/
+[Nginx runs on a seperate machine](
+https://www.upcloud.com/support/how-to-set-up-load-balancing/)
 
-Nginx official round-robin, least-conn algo:
-https://www.nginx.com/resources/admin-guide/load-balancer/
+[Nginx official round-robin, least-conn algo](
+https://www.nginx.com/resources/admin-guide/load-balancer/)
 
-Install nginx in a new VM, after installation, open a browser and check
-`localhost`, you should see the nginx page.
-```
-apt-get install nginx
-```
+[Ngxin Load Balancing example](
+https://www.nginx.com/resources/wiki/start/topics/examples/loadbalanceexample/)
+
+Install nginx `apt-get install nginx` in Master0, after installation, open url `localhost` in a browser, you should see the nginx page.
 
 Config `/etc/nginx/sites-available/default`
+[cookeem example](https://github.com/cookeem/kubeadm-ha/blob/master/nginx-lb/nginx-lb.conf.tpl)
+[klausenbusk post example](https://github.com/kubernetes/kubeadm/issues/546)
 ```
-upstream www {
-        server 192.168.0.50;
-        server 192.168.0.51;
-        server 192.168.0.52;
+stream {
+    upstream apiserver {
+        least_conn;
+
+        server 192.168.0.56:6443 weight=5 max_fails=3 fail_timeout=30s;
+        # server K8SHA_IP2:6443 weight=1 max_fails=3 fail_timeout=15s;
+        # server K8SHA_IP3:6443 weight=2 max_fails=2 fail_timeout=30s;
+    }
+
+    server {
+        listen 16443;
+        proxy_connect_timeout 1s;
+        proxy_timeout 3s;
+        proxy_pass apiserver;
+    }
 }
 ```
+Add the master1 and master2 later for their IP.
 
 Generate SSH keys for each of the master nodes by `ssh-keygen -t rsa -b 4096 -C "<email>"`. After doing this, each master will have an SSH key in `~/.ssh/id_rsa.pub` and an entry in etcd0’s `~/.ssh/authorized_keys` file.
 
@@ -370,7 +589,7 @@ networking:
 apiServerCertSANs:
 - <load-balancer-ip>
 apiServerExtraArgs:
-  endpoint-reconciler-type=lease
+  endpoint-reconciler-type: lease
 EOF
 ```
 
@@ -380,11 +599,15 @@ Ensure that the following placeholders are replaced:
 `<etcd0-ip>`, `<etcd1-ip>` and `<etcd2-ip>` with the IP addresses of your three etcd nodes
 `<podCIDR>` with your Pod CIDR (Flannel CNI `--pod-network-cidr=10.244.0.0/16`). Please read the CNI network section of the docs for more information. Some CNI providers do not require a value to be set.
 `<load-balancer-ip>` from nginx
+If you are using Kubernetes 1.9+, you can replace the `apiserver-count: 3` extra argument with `endpoint-reconciler-type=lease`.
+
+Change endpoint to http in line with etcd cluster config.
 ```
+---
 apiVersion: kubeadm.k8s.io/v1alpha1
 kind: MasterConfiguration
 api:
-  advertiseAddress: 192.168.0.43
+  advertiseAddress: 192.168.0.56
 etcd:
   endpoints:
   - http://192.168.0.50:2379
@@ -398,5 +621,91 @@ networking:
 apiServerCertSANs:
 - 192.168.0.53
 apiServerExtraArgs:
-  endpoint-reconciler-type=lease
+  endpoint-reconciler-type: lease
 ```
+
+After k8s initialised, run the common k8s recommandations
+```
+export KUBECONFIG=/etc/kubernetes/admin.conf
+
+# install Flannel
+kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/v0.9.1/Documentation/kube-flannel.yml
+
+# 24h token
+kubeadm join --token 5f151f.454be115e4281897 192.168.0.56:6443 --discovery-token-ca-cert-hash sha256:c39cf12c6a9e1956c74555e22dd40060530158d4a6ee5d3c48e0205818f8a0da
+
+```
+
+## Troubleshoot kubeadm init issues
+* [Port-10250  is in use](https://github.com/kubernetes/kubeadm/issues/339)
+```
+[preflight] Some fatal errors occurred:
+        [ERROR Port-10250]: Port 10250 is in use
+        [ERROR Port-10251]: Port 10251 is in use
+        [ERROR Port-10252]: Port 10252 is in use
+```
+
+Install net-tools package and check port, kill all pid and re-try
+```
+root@master0:apt-get install net-tools
+root@master0:/etc/kubernetes/pki/etcd# netstat -a | grep 10250
+tcp6       0      0 [::]:10250              [::]:*                  LISTEN
+root@master0:/etc/kubernetes/pki/etcd# netstat -lnp | grep 1025
+tcp        0      0 127.0.0.1:10251         0.0.0.0:*               LISTEN      1919/kube-scheduler
+tcp        0      0 127.0.0.1:10252         0.0.0.0:*               LISTEN      1859/kube-controlle
+tcp6       0      0 :::10255                :::*                    LISTEN      396/kubelet
+tcp6       0      0 :::10250                :::*                    LISTEN      396/kubelet
+root@master0:/etc/kubernetes/pki/etcd# kill 1919
+root@master0:/etc/kubernetes/pki/etcd# kill 1859
+root@master0:/etc/kubernetes/pki/etcd# kill 396
+root@master0:/etc/kubernetes/pki/etcd# netstat -lnp | grep 1025
+```
+
+* etcd version "" empty. Such error means k8s can't talk to etcd cluster.
+check kubeadm config.yaml their etcd endpoints https or http should be inline with etcd cluster.
+```
+Dec 13 12:52:01 ip-172-20-144-6 kubeadm[858]:         [ERROR ExternalEtcdVersion]: couldn't parse external etcd version "": Version string empty
+
+```
+
+* `systemctl status nginx` failed
+[Suggestion](https://serverfault.com/questions/883073/nginx-emerg-stream-directive-is-not-allowed-here)
+stream{} was configured inside `default` and `default` is included in `nginx.conf` blockk http{}, this nest is wrong.
+stream{} and http{} needs to be at the same level in nginx, so delete http{} inside `nginx.conf` and add stream{}, keep default
+as the orgin file.
+```
+root@master1:/etc/kubernetes/pki/etcd# systemctl status nginx
+● nginx.service - A high performance web server and a reverse proxy server
+   Loaded: loaded (/lib/systemd/system/nginx.service; disabled; vendor preset: enabled)
+   Active: failed (Result: exit-code) since Sun 2018-02-11 11:28:23 EST; 15min ago
+     Docs: man:nginx(8)
+      CPU: 20ms
+
+Feb 11 11:28:22 master1 systemd[1]: Starting A high performance web server and a reverse pFeb 11 11:28:23 master1 nginx[489]: nginx: [emerg] "stream" directive is not allowed here Feb 11 11:28:23 master1 nginx[489]: nginx: configuration file /etc/nginx/nginx.conf test fFeb 11 11:28:23 master1 systemd[1]: nginx.service: Control process exited, code=exited staFeb 11 11:28:23 master1 systemd[1]: Failed to start A high performance web server and a reFeb 11 11:28:23 master1 systemd[1]: nginx.service: Unit entered failed state.
+Feb 11 11:28:23 master1 systemd[1]: nginx.service: Failed with result 'exit-code'.
+```
+
+# Run kubeadm init on other masters: master1 and master2
+Before running kubeadm on the other masters, you need to first copy the K8s CA cert from master0.
+```
+# make sure master1 and master2 can access master0 via ssh
+scp root@<master0-ip-address>:/etc/kubernetes/pki/* /etc/kubernetes/pki
+rm apiserver.crt
+```
+The goal is to copy the contents of `/etc/kubernetes/pki/ca.crt` and `/etc/kubernetes/pki/ca.key` of master0 and create these files manually on master1 and master2.
+
+Then change the IP address for `/etc/kubernetes/pki/etcd/config.yaml for master1 192.168.0.57 and master2 192.168.0.58
+```
+api:
+  advertiseAddress: 192.168.0.56
+```
+Stop the nginx service on master1 and master2, keep them disabled
+```
+service nginx stop
+systemctl disable nginx
+```
+Reconfig the `nginx.conf` inside master0 to activate the balancing on master1 and master2.
+
+Repeat the `kubeadm init --config=config.yaml` for both master1 and master2, then install flannel as well.
+
+# Add worksers in k8s cluster
