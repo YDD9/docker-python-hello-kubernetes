@@ -61,3 +61,28 @@ Under the covers, this exposes the Pod via Docker Port Mapping. As a result, you
 To find the details you can use docker ps | grep httpexposed
 
 "Pause Containers" Running the above command you'll notice the ports are exposed on the Pod, not the http container itself. The "Pause container" is responsibility for defining the network for the Pod. Other containers in the pod use share the same network namespace. This improves network performance and allow multiple containers to communicate over the same network interface.
+
+Troubleshoot dns command
+```
+journalctl -ex | grep kubelet --color
+
+nano /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=cgroupfs"
+
+systemctl daemon-reload && systemctl restart kubelet docker
+```
+
+```
+nano /etc/docker/daemon.json
+cgroupfs
+
+systemctl daemon-reload && systemctl restart kubelet docker
+```
+
+```
+cd ~
+kubeadm reset
+cp -R /etc/kubernetes/pki-bak/etcd /etc/kubernetes/pki
+cd /etc/kubernetes/pki/etcd
+kubeadm init --config=config.yaml
+```

@@ -24,16 +24,16 @@ Work based on host PC Win10 and VirtualBox, with different VirtualBox network se
 - [Use kubeadm to setup Kubernetes cluster](#use-kubeadm-to-setup-kubernetes-cluster)
 - [Prepare deployment.yml and deploy app with kubectl](#prepare-deploymentyml-and-deploy-app-with-kubectl)
 - [Check deployment status and troubleshot](#check-deployment-status-and-troubleshot)
-        - [Once deployment created, check the process status](#once-deployment-created-check-the-process-status)
-        - [Why deployment is unavailable, check deployed pods](#why-deployment-is-unavailable-check-deployed-pods)
-        - [Why FailedCreatePodSandBox](#why-failedcreatepodsandbox)
-        - [Why kube-flannel CrashLoopBackOff and kube-dns keep ContainerCreating...](#why-kube-flannel-crashloopbackoff-and-kube-dns-keep-containercreating)
+    - [Once deployment created, check the process status](#once-deployment-created-check-the-process-status)
+    - [Why deployment is unavailable, check deployed pods](#why-deployment-is-unavailable-check-deployed-pods)
+    - [Why FailedCreatePodSandBox](#why-failedcreatepodsandbox)
+    - [Why kube-flannel CrashLoopBackOff and kube-dns keep ContainerCreating...](#why-kube-flannel-crashloopbackoff-and-kube-dns-keep-containercreating)
 - [kube-dns still failing and needs to be deleted](#kube-dns-still-failing-and-needs-to-be-deleted)
-        - [retry with Flannel with hard coded IP range 10.244.0.0/16 and kube-dns works](#retry-with-flannel-with-hard-coded-ip-range-102440016-and-kube-dns-works)
+    - [retry with Flannel with hard coded IP range 10.244.0.0/16 and kube-dns works](#retry-with-flannel-with-hard-coded-ip-range-102440016-and-kube-dns-works)
 - [Kubectl Autocomplete](#kubectl-autocomplete)
 - [Deploy again the app](#deploy-again-the-app)
-        - [To workaround the Linux bug persistent MAC address on VirtualBox https://github.com/systemd/systemd/issues/3374](#to-workaround-the-linux-bug-persistent-mac-address-on-virtualbox-httpsgithubcomsystemdsystemdissues3374)
-        - [Error adding network: failed to set bridge cni](#error-adding-network-failed-to-set-bridge-cni)
+    - [To workaround the Linux bug persistent MAC address on VirtualBox https://github.com/systemd/systemd/issues/3374](#to-workaround-the-linux-bug-persistent-mac-address-on-virtualbox-httpsgithubcomsystemdsystemdissues3374)
+    - [Error adding network: failed to set bridge cni](#error-adding-network-failed-to-set-bridge-cni)
 - [Further info check other *.md files](#further-info-check-other-md-files)
 
 
@@ -344,7 +344,7 @@ check journalctl on master and on nodes
 check kubelet status on master and on nodes
 check `kubectl describe pods python-hello-deployment`
 
-work on each errors, normally the kube-dns is troublesome, install different CNI is one option
+work on each errors, normally the kube-dns is troublesome, try different CNI is last option
 ```
 $ journalctl -u kubelet
 $ journalctl -xe
@@ -364,6 +364,67 @@ $ systemctl status kubelet -l
            └─1337 /usr/bin/kubelet --bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/ku
 
 Dec 30 18:10:04 kubeslave1 kubelet[1337]: W1230 18:10:04.407499    1337 reflector.go:341] k8s.io/kubernetes/pkg/kubelet/config/aDec 30 18:15:41 kubeslave1 kubelet[1337]: W1230 18:15:41.698709    1337 raw.go:87] Error while processing event ("/sys/fs/cgroupDec 30 18:15:41 kubeslave1 kubelet[1337]: W1230 18:15:41.703225    1337 raw.go:87] Error while processing event ("/sys/fs/cgroupDec 30 18:15:41 kubeslave1 kubelet[1337]: W1230 18:15:41.703284    1337 raw.go:87] Error while processing event ("/sys/fs/cgroupDec 30 18:15:41 kubeslave1 kubelet[1337]: W1230 18:15:41.703315    1337 raw.go:87] Error while processing event
+```
+Further kube-dns crash issues solutions
+https://github.com/kubernetes/kubernetes/issues/54910
+
+Check `cat /var/log/message` log.
+Also check kubelet log via `journalctl -u kubelet` for now.
+Service status check `systemctl status kubelet -l`
+
+Check pod info `kubectl logs --namespace=kube-system $(kubectl get pods --namespace=kube-system -l k8s-app=kube-dns -o name) -c kubedns`
+https://github.com/coreos/coreos-kubernetes/issues/878
+```
+E0211 20:21:19.857061       1 reflector.go:201] k8s.io/dns/pkg/dns/dns.go:147: Failed to list *v1.Endpoints: Get https://10.96.0.1:443/api/v1/endpoints?resourceVersion=0: dial tcp 10.96.0.1:443: getsockopt: no route to host
+```
+Check there is no firewall issue between Master Node and Worker Node
+
+Check iptable `iptables -S` https://www.digitalocean.com/community/tutorials/how-to-list-and-delete-iptables-firewall-rules
+
+try turning off firewall and drop rule which may close connectivity
+
+But best solution would be on basis of error which you are getting, so check deamon log at /var/lib/messeges and systemctl status kubelet -l
+
+For Kube dns mostly issue are kubelet and docker not in sync i.e. check kubelet and docker using same cgroup driver
+
+Issue : kube-dns crashloopbackoff after flannel/weave install
+Solution:
+We can not use `--cgroup-driver=systemd`, it must use `cgroupfs`!
+Which is different from official described by [Docker installation for k8s](https://kubernetes.io/docs/setup/independent/install-kubeadm/)
+
+Docker runtime cgroups setups via `sudo dockerd --exec-opt native.cgroupdriver=cgroupfs` or
+Set the docker daemon to use cgroupfs:
+```
+cat << EOF > /etc/docker/daemon.json
+{
+  "exec-opts": ["native.cgroupdriver=cgroupfs"]
+}
+EOF
+
+# Set kubelet use cgroupfs too:
+$ vi /etc/systemd/system/kubelet.service.d/10-kubeadm.conf
+# Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=systemd"
+Environment="KUBELET_CGROUP_ARGS=--cgroup-driver=cgroupfs"
+
+# !!! Reload daemon setting then restart kubelet and docker EVERY TIME FILE CHANGE !!!
+systemctl daemon-reload && systemctl restart kubelet docker
+# verify
+docker info |grep -i cgroup
+```
+Important NOTE
+you'll need to change cgroup driver also in your nodes.
+
+
+healthz error
+```
+[kubelet-check] The HTTP call equal to 'curl -sSL http://localhost:10255/healthz' failed with error: Get http://localhost:10255/healthz: dial tcp [::1]:10255: getsockopt: connection refused.
+```
+Check `journalctl -ex | grep kubelet --color`
+```
+Feb 11 16:53:30 master0 kubelet[25759]: error: failed to run Kubelet: failed to create kubelet: misconfiguration: kubelet cgroup driver: "cgroupfs" is different from docker cgroup driver: "systemd"
+Feb 11 16:53:30 master0 systemd[1]: kubelet.service: Main process exited, code=exited, status=1/FAILURE
+Feb 11 16:53:30 master0 systemd[1]: kubelet.service: Unit entered failed state.
+Feb 11 16:53:30 master0 systemd[1]: kubelet.service: Failed with result 'exit-code'.
 ```
 
 swap must not be used.
