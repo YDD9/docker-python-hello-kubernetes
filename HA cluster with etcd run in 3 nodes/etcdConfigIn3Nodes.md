@@ -15,6 +15,7 @@ Except mentioned specifically, all steps runs on all etcd 3 work nodes.
     - [Exploring the nginx.conf File](#exploring-the-nginxconf-file)
     - [Exploring the Default Server Block](#exploring-the-default-server-block)
     - [Config ngxin on Master0](#config-ngxin-on-master0)
+- [VirtualIP failover with Keepalived](#virtualip-failover-with-keepalived)
     - [Troubleshoot kubeadm init issues](#troubleshoot-kubeadm-init-issues)
 - [Run kubeadm init on other masters: master1 and master2](#run-kubeadm-init-on-other-masters-master1-and-master2)
 - [Add worksers in k8s cluster](#add-worksers-in-k8s-cluster)
@@ -536,7 +537,7 @@ https://www.nginx.com/resources/wiki/start/topics/examples/loadbalanceexample/)
 
 Install nginx `apt-get install nginx` in Master0, after installation, open url `localhost` in a browser, you should see the nginx page.
 
-Config `/etc/nginx/sites-available/default`
+Config `/etc/nginx/nginx.conf` not `/etc/nginx/sites-available/default`
 [cookeem example](https://github.com/cookeem/kubeadm-ha/blob/master/nginx-lb/nginx-lb.conf.tpl)
 [klausenbusk post example](https://github.com/kubernetes/kubeadm/issues/546)
 ```
@@ -550,7 +551,7 @@ stream {
     }
 
     server {
-        listen 16443;
+        listen 192.168.0.100:16443;
         proxy_connect_timeout 1s;
         proxy_timeout 3s;
         proxy_pass apiserver;
@@ -558,6 +559,43 @@ stream {
 }
 ```
 Add the master1 and master2 later for their IP.
+
+# VirtualIP failover with Keepalived
+http://dasunhegoda.com/nginx-reverse-proxying-load-balancing/1248/
+
+```
+apt-get install keepalived
+nano /etc/keepalived/keepalived.conf
+
+# Keepalived process identifier
+lvs_id nginx_DH
+}
+# Script used to check if HAProxy is running
+vrrp_script check_nginx {
+script "killall -0 nginx"
+interval 2
+weight 2
+}
+# Virtual interface
+# The priority specifies the order in which the assigned interface to take over in a failover
+vrrp_instance VI_01 {
+state SLAVE
+interface eth0
+virtual_router_id 51
+priority 101
+# The virtual ip address shared between the two loadbalancers
+virtual_ipaddress {
+FLOATING_IP
+}
+track_script {
+check_nginx
+}
+}
+```
+`interface eth0` is `interface enp0s3`
+`state SLAVE` is for Master1 and Master2, `state MASTER` is for Master0.
+`FLOATING_IP` is 192.168.0.100 the virtual IP
+
 
 Generate SSH keys for each of the master nodes by `ssh-keygen -t rsa -b 4096 -C "<email>"`. After doing this, each master will have an SSH key in `~/.ssh/id_rsa.pub` and an entry in etcd0’s `~/.ssh/authorized_keys` file.
 
@@ -619,7 +657,7 @@ etcd:
 networking:
   podSubnet: 10.244.0.0/16
 apiServerCertSANs:
-- 192.168.0.53
+  - 192.168.0.100
 apiServerExtraArgs:
   endpoint-reconciler-type: lease
 ```
