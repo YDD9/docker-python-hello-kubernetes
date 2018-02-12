@@ -570,6 +570,9 @@ systemctl stop docker
 rm -rf /var/lib/cni/
 rm -rf /var/lib/kubelet/*
 rm -rf /etc/cni/
+rm -rf /run/flannel
+rm -rf /run/calico
+
 
 # delete network interface in case of centOS ifconfig cni0 down
 ip link delete cni0
@@ -578,6 +581,7 @@ ip link delete docker0
 
 systemctl start docker
 ```
+In HAcluster with seperate nodes for etcd cluster, the flannel config will be retrieved directly there, so delete above won't delete flannel either!!!
 
 Repeat the cluster setup and app deployment works
 ```
