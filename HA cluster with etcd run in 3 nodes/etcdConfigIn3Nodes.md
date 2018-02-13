@@ -289,7 +289,25 @@ member 79daeb26f9651b44 is healthy: got healthy result from http://192.168.0.50:
 member c52ff0ed834fd076 is healthy: got healthy result from http://192.168.0.51:2379
 member de245bc5339308a0 is healthy: got healthy result from http://192.168.0.52:2379
 cluster is healthy
+
+# if only one member is unhealthy, try to remove it and delete its data then add it back
+etcdctl member remove a579b5a3a078c227
+systemctl stop etcd
+# path configured in --data-dir
+rm -rf /var/lib/etcd
+systemctl start etcd
+
+etcdctl member add <node name> http://<node IP>:2380
+# try change etcd.config --initial-cluster-state new to existing
+reboot
 ```
+etcdctl member add -h
+NAME:
+   etcdctl member add - add a new member to the etcd cluster
+
+USAGE:
+   etcdctl member add <name> <peerURL>
+
 
 Make sure the service is started with know `PEER_NAME` and `PRIVATE_IP`
 ```
@@ -312,7 +330,8 @@ root@etcd2:/etc/kubernetes/pki/etcd# systemctl status etcd
  Main PID: 2760 (etcd)
     Tasks: 7 (limit: 4915)
    CGroup: /system.slice/etcd.service
-           └─2760 /usr/local/bin/etcd --name etcd2 --data-dir /var/lib/etcd --listen-client-urls http://192.168.0.52:2379 --advertise-client-urls http://192.168.0.52:2379 --listen-peer-urls http://192.168.0.52:2380 --initial-advertise-peer-urls http://192.168.0.52:2380 --cert-file=/etc/kubernetes/pki/etcd/server.pem --key-file=/etc/kubernetes/pki/etcd/server-key.pem --client-cert-auth --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --peer-cert-file=/etc/kubernetes/pki/etcd/peer.pem --peer-key-file=/etc/kubernetes/pki/etcd/peer-key.pem --peer-client-cert-auth --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --initial-cluster etcd0=http://192.168.0.50:2380,etcd1=http://192.168.0.51:2380,etcd2=http://192.168.0.52:2380 --initial-cluster-token my-etcd-token --initial-cluster-state new
+           └─2760 /usr/local/bin/etcd --name etcd2 --data-dir /var/lib/etcd --listen-client-urls http://192.168.0.52:2379 --advertise-client-urls http://192.168.0.52:2379 --listen-peer-urls http://192.168.0.52:2380 --initial-advertise-peer-urls http://192.168.0.52:2380 --cert-file=/etc/kubernetes/pki/etcd/server.pem --key-file=/etc/kubernetes/pki/etcd/server-key.pem --client-cert-auth --trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --peer-cert-file=/etc/kubernetes/pki/etcd/peer.pem --peer-key-file=/etc/kubernetes/pki/etcd/peer-key.pem --peer-client-cert-auth --peer-trusted-ca-file=/etc/kubernetes/pki/etcd/ca.pem --initial-cluster etcd0=http://192.168.0.50:2380,etcd1=http://192.168.0.51:2380,etcd2=http://192.168.0.52:2380 --initial-cluster-token my-etcd-token
+           --initial-cluster-state new
 ```
 
 If after VMs reboot, etcd cluster and service failed to restart, do below
@@ -541,13 +560,23 @@ Config `/etc/nginx/nginx.conf` not `/etc/nginx/sites-available/default`
 [cookeem example](https://github.com/cookeem/kubeadm-ha/blob/master/nginx-lb/nginx-lb.conf.tpl)
 [klausenbusk post example](https://github.com/kubernetes/kubeadm/issues/546)
 ```
+user www-data;
+worker_processes auto;
+pid /run/nginx.pid;
+include /etc/nginx/modules-enabled/*.conf;
+
+events {
+        worker_connections 768;
+        # multi_accept on;
+}
+
 stream {
     upstream apiserver {
         least_conn;
 
         server 192.168.0.56:6443 weight=5 max_fails=3 fail_timeout=30s;
-        # server K8SHA_IP2:6443 weight=1 max_fails=3 fail_timeout=15s;
-        # server K8SHA_IP3:6443 weight=2 max_fails=2 fail_timeout=30s;
+        server 192.168.0.57:6443 weight=1 max_fails=3 fail_timeout=15s;
+        server 192.168.0.58:6443 weight=2 max_fails=2 fail_timeout=30s;
     }
 
     server {
@@ -723,6 +752,10 @@ Feb 11 11:28:22 master1 systemd[1]: Starting A high performance web server and a
 Feb 11 11:28:23 master1 systemd[1]: nginx.service: Failed with result 'exit-code'.
 ```
 
+* After `kubeadm init --config=config.yaml` the cni is auto loaded
+This issue came because currently etcd cluster is not gone when executing `kubeadm reset`, so next time `kubeadm init` will directly load config from perminant etcd cluster and your old installed cni will cause you trouble mostly
+
+
 # Run kubeadm init on other masters: master1 and master2
 Before running kubeadm on the other masters, you need to first copy the K8s CA cert from master0.
 ```
@@ -737,13 +770,12 @@ Then change the IP address for `/etc/kubernetes/pki/etcd/config.yaml for master1
 api:
   advertiseAddress: 192.168.0.56
 ```
-Stop the nginx service on master1 and master2, keep them disabled
+Stop the nginx service on master1 and master2, keep them disabled, (anyway it doesn't run then no need to install Keepalived on Master1 and Master2) should it be like this ???
 ```
 service nginx stop
 systemctl disable nginx
 ```
-Reconfig the `nginx.conf` inside master0 to activate the balancing on master1 and master2.
 
-Repeat the `kubeadm init --config=config.yaml` for both master1 and master2, then install flannel as well.
+Repeat the `kubeadm init --config=config.yaml` for both master1 and master2, then check if flannel starts by itself otherwise install as usual.
 
 # Add worksers in k8s cluster
