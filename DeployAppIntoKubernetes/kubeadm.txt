@@ -24,9 +24,14 @@ export PS1="root@192.168.0.39:$ "
 
 a 24 hours valid token:
 kubeadm join --token 08475e.79797e42c2c05a3b 192.168.0.43:6443 --discovery-token-ca-cert-hash sha256:e677f55badef0ce7e526e540398d5179e1362cbe896f2d5d9a928af6545595e6
-You can re-create this token:
+# You can re-create this token:
 https://kubernetes.io/docs/reference/setup-tools/kubeadm/kubeadm-token/
 kubeadm create token 08475e.79797e42c2c05a3b
+
+# you can use kubeadm token list and kubeadm get po --all-spacename and compare the time to find right token for you cluster.
+
+# you can generate new join
+kubeadm token create --print-join-command
 
 Start containers using Kubectl
 https://www.katacoda.com/courses/kubernetes/kubectl-run-containers

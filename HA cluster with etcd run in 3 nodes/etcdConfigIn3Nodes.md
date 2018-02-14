@@ -18,6 +18,7 @@ Except mentioned specifically, all steps runs on all etcd 3 work nodes.
 - [VirtualIP failover with Keepalived](#virtualip-failover-with-keepalived)
     - [Troubleshoot kubeadm init issues](#troubleshoot-kubeadm-init-issues)
 - [Run kubeadm init on other masters: master1 and master2](#run-kubeadm-init-on-other-masters-master1-and-master2)
+    - [troubleshoot](#troubleshoot)
 - [Add worksers in k8s cluster](#add-worksers-in-k8s-cluster)
 
 # Install cfssl - CLI & API tool for TLS/SSL
@@ -778,4 +779,39 @@ systemctl disable nginx
 
 Repeat the `kubeadm init --config=config.yaml` for both master1 and master2, then check if flannel starts by itself otherwise install as usual.
 
+## troubleshoot
+one of the three kube-proxy always have trouble, check its error
+```
+$ kubectl describe po kube-proxy-7flv8 -n kube-system
+
+Warning  InspectFailed          5s (x9 over 1m)  kubelet, master2  Failed to inspect image "gcr.io/google_containers/kube-proxy-amd64:v1.9.3": rpc error: code = Unknown desc = Error response from daemon: readlink /var/lib/docker/overlay2: invalid argument
+  Warning  Failed                 5s (x9 over 1m)  kubelet, master2  Error: ImageInspectError
+```
+https://github.com/kubernetes/kubernetes/issues/52462 further check Failed to inspect image based on the github issue
+```
+$  journalctl -u kubelet | grep "eviction manager" --color
+
+Feb 14 15:36:02 master2 kubelet[373]: E0214 15:36:02.581088     373 eviction_manager.go:238] eviction manager: unexpected err: failed to get node info: node "master2" not found
+Feb 14 15:36:12 master2 kubelet[373]: E0214 15:36:12.582227     373 eviction_manager.go:238] eviction manager: unexpected err: failed to get node info: node "master2" not found
+Feb 14 15:36:42 master2 kubelet[373]: W0214 15:36:42.647907     373 eviction_manager.go:332] eviction manager: attempting to reclaim imagefs
+Feb 14 15:36:42 master2 kubelet[373]: I0214 15:36:42.648800     373 helpers.go:1070] eviction manager: attempting to delete unused containers
+Feb 14 15:36:42 master2 kubelet[373]: I0214 15:36:42.752552     373 helpers.go:1080] eviction manager: attempting to delete unused images
+```
+
 # Add worksers in k8s cluster
+Configure workers
+Reconfigure kube-proxy to access kube-apiserver via the load balancer:
+```
+kubectl get configmap -n kube-system kube-proxy -o yaml > kube-proxy-сm.yaml
+sed -i 's#server:.*#server: https://<masterLoadBalancerFQDN>:6443#g' kube-proxy-cm.yaml
+kubectl apply -f kube-proxy-cm.yaml --force
+# restart all kube-proxy pods to ensure that they load the new configmap
+kubectl delete pod -n kube-system -l k8s-app=kube-proxy
+```
+Reconfigure the kubelet to access kube-apiserver via the load balancer:
+```
+sudo sed -i 's#server:.*#server: https://<masterLoadBalancerFQDN>:6443#g' /etc/kubernetes/kubelet.conf
+sudo systemctl restart kubelet
+```
+
+`<masterLoadBalancerFQDN>` is 192.168.0.100
