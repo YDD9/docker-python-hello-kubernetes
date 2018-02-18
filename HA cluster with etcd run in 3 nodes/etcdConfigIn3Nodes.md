@@ -228,7 +228,7 @@ etcd0 192.168.0.50
 etcd1 192.168.0.51
 etcd2 192.168.0.52
 ```
-Finally, launch etcd like so:
+Finally, launch etcd like so at lease 2 nodes:
 ```
 systemctl daemon-reload
 systemctl start etcd
@@ -635,6 +635,12 @@ mkdir -p /etc/kubernetes/pki/etcd
 scp root@<etcd0-ip-address>:/etc/kubernetes/pki/etcd/ca.pem /etc/kubernetes/pki/etcd
 scp root@<etcd0-ip-address>:/etc/kubernetes/pki/etcd/client.pem /etc/kubernetes/pki/etcd
 scp root@<etcd0-ip-address>:/etc/kubernetes/pki/etcd/client-key.pem /etc/kubernetes/pki/etcd
+```
+
+```
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/ca.pem /etc/kubernetes/pki/etcd
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/client.pem /etc/kubernetes/pki/etcd
+scp root@192.168.0.50:/etc/kubernetes/pki/etcd/client-key.pem /etc/kubernetes/pki/etcd
 ```
 
 Run `kubeadm init --config=config.yaml`
