@@ -1,0 +1,65 @@
+cat <<EOF >  /etc/sysctl.d/k8s.conf
+net.bridge.bridge-nf-call-ip6tables = 1
+net.bridge.bridge-nf-call-iptables = 1
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl --system
+
+
+docker pull quay.io/calico/kube-controllers:v2.0.0
+docker pull quay.io/calico/node:v3.0.1
+docker pull quay.io/calico/cni:v2.0.0
+docker pull quay.io/coreos/flannel:v0.9.1-amd64
+docker pull gcr.io/google_containers/heapster-amd64:v1.4.2
+docker pull gcr.io/google_containers/heapster-grafana-amd64:v4.4.3
+docker pull gcr.io/google_containers/heapster-influxdb-amd64:v1.3.3
+docker pull gcr.io/google_containers/k8s-dns-kube-dns-amd64:1.14.7
+docker pull gcr.io/google_containers/k8s-dns-dnsmasq-nanny-amd64:1.14.7
+docker pull gcr.io/google_containers/k8s-dns-sidecar-amd64:1.14.7
+docker pull gcr.io/google_containers/kube-apiserver-amd64:v1.9.1
+docker pull gcr.io/google_containers/kube-controller-manager-amd64:v1.9.1
+docker pull gcr.io/google_containers/kube-proxy-amd64:v1.9.1
+docker pull gcr.io/google_containers/kube-scheduler-amd64:v1.9.1
+docker pull gcr.io/google_containers/kubernetes-dashboard-amd64:v1.8.1
+docker pull nginx
+
+curl -L https://github.com/docker/compose/releases/download/1.19.0/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+apt-get install -y docker-compose-1.9.0-5.el7.noarch
+systemctl enable docker && systemctl start docker
+
+cd ~/Downloads/kubeadm-ha
+kubeadm reset
+rm -rf /var/lib/etcd-cluster
+docker-compose --file etcd/docker-compose.yaml stop
+docker-compose --file etcd/docker-compose.yaml rm -f
+docker-compose --file etcd/docker-compose.yaml up -d
+
+docker exec -ti etcd etcdctl cluster-health
+
+
+systemctl stop kubelet
+systemctl stop docker
+rm -rf /var/lib/cni/
+rm -rf /var/lib/kubelet/*
+rm -rf /etc/cni/
+
+ip a | grep -E 'docker|flannel|cni'
+ip link del docker0
+ip link del flannel.1
+ip link del cni0
+
+systemctl restart docker && systemctl restart kubelet
+ip a | grep -E 'docker|flannel|cni'
+
+kubeadm init --config=kubeadm-init.yaml
+ kubeadm join --token 7f276c.0741d82a5337f526 192.168.0.56:6443 --discovery-token-ca-cert-hash sha256:259881dcf3315f0a2d465e947355b9cfcae75c39a7d432701008f69f189e8e17
+
+
+kubectl apply -f kube-flannel/
+kubectl get pods --all-namespaces -o wide
+kubectl taint nodes --all node-role.kubernetes.io/master-
+kubectl apply -f kube-dashboard/
+kubectl -n kube-system describe secret $(kubectl -n kube-system get secret | grep admin-user | awk '{print $1}')
+ eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJrdWJlcm5ldGVzL3NlcnZpY2VhY2NvdW50Iiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9uYW1lc3BhY2UiOiJrdWJlLXN5c3RlbSIsImt1YmVybmV0ZXMuaW8vc2VydmljZWFjY291bnQvc2VjcmV0Lm5hbWUiOiJhZG1pbi11c2VyLXRva2VuLW12ejhqIiwia3ViZXJuZXRlcy5pby9zZXJ2aWNlYWNjb3VudC9zZXJ2aWNlLWFjY291bnQubmFtZSI6ImFkbWluLXVzZXIiLCJrdWJlcm5ldGVzLmlvL3NlcnZpY2VhY2NvdW50L3NlcnZpY2UtYWNjb3VudC51aWQiOiIxMDE0ZGEyNy0xNGY3LTExZTgtOWRkYS0wODAwMjc5OTAyZjgiLCJzdWIiOiJzeXN0ZW06c2VydmljZWFjY291bnQ6a3ViZS1zeXN0ZW06YWRtaW4tdXNlciJ9.G5sW9VNpsh3JR_LJks7MZ3ZAWZFow9EmHyi2YGndpnys13PFWptqtEkCPwK_iEUVXvptTaecLk9-6vav6W_e9WZiEAs2c-z2nhdrbXpDQmAAcEUKdYLa8_gkwe-Q2Ia_ur0J1ELJvH1SfuffKpGyY3tE_RL1s9dWaeJO0Yf3La2bptrYADiJSv3oKvSM_4eP2g36kVTpFNt3tWILqNf0cnd0g7FZzQyYinUvRE_cX1PkibuJ22fPMopbOangBWidIDCwQJtKNM8dC9lR872KUp80mh7Dgjo1WOHIDVoCrSw0S8rmLFHjzZEP241_-N4ONrILDF5HKQwlJSC0NJBwvA
